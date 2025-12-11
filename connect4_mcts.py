@@ -530,13 +530,11 @@ def mcts_search(root_state, iterations=1000, exploration_constant=1.414):
     root_node = MCTSNode(root_state.clone())
     
     # Run MCTS for the specified number of iterations
-    for iteration in range(iterations):
-        
-        # === PHASE 1: SELECTION ===
+    for _ in range(iterations):
         # Start at the root and pick a path down the tree using UCB1
-        
         node = root_node          # Current node we're examining
         state = root_state.clone()  # Clone state to track where we are
+        # === PHASE 1: SELECTION ===
         
         # Keep going down the tree as long as:
         # - The node has been fully expanded (all moves tried)
@@ -580,13 +578,14 @@ def mcts_search(root_state, iterations=1000, exploration_constant=1.414):
             
             # If this node's player is the root player,
             # add the result directly
-            if node.state.current_player == root_player:
+            # player who made the move into this node
+            player_who_moved = PLAYER1 if node.state.current_player == PLAYER2 else PLAYER2
+
+            if player_who_moved == root_player:
                 node.update(result)
             else:
-                # If this node's player is the opponent,
-                # flip the result (win becomes loss, loss becomes win)
                 node.update(1.0 - result)
-            
+
             # Move up to the parent
             node = node.parent
     
@@ -599,100 +598,30 @@ def mcts_search(root_state, iterations=1000, exploration_constant=1.414):
     # If we somehow have no children (shouldn't happen), return None
     if best_child is None:
         return None
+
+    print("\n=== MCTS STATS ===")
+    print(f"Total root visits: {root_node.visits}")
+
+    print("\nChildren:")
+    for child in root_node.children:
+        win_rate = child.wins / child.visits if child.visits > 0 else 0
+        print(f"  Move {child.move}: visits={child.visits}, wins={child.wins}, win_rate={win_rate:.3f}")
+
+    print("\nUCB scores:")
+    for child in root_node.children:
+        if child.visits > 0:
+            exploitation = child.wins / child.visits
+            exploration = exploration_constant * math.sqrt(math.log(root_node.visits) / child.visits)
+            ucb = exploitation + exploration
+        else:
+            ucb = float('inf')
+        print(f"  Move {child.move}: UCB={ucb}")
+
+
+    print("==================\n")
     
     # Return the move (column index) that leads to the best child
     return best_child.move
-
-
-def mcts_search_with_stats(root_state, iterations=1000):
-    """
-    MCTS search that also returns detailed statistics for analysis.
-    
-    This is identical to the regular mcts_search function, but it also
-    returns statistics about the search for debugging or analysis purposes.
-    
-    Useful for:
-    - Understanding what the AI is "thinking"
-    - Debugging the search algorithm
-    - Visualizing the search tree
-    - Comparing different moves' statistics
-    
-    The statistics include:
-    - Total visits to the root node
-    - For each possible move:
-      * Which column it is
-      * How many times it was visited
-      * Total wins accumulated
-      * Win rate (wins / visits)
-    
-    Arguments:
-        root_state: Current game state to search from
-        iterations: Number of MCTS iterations to perform (default 1000)
-        
-    Returns:
-        Tuple of (best_move, statistics_dict) where:
-        - best_move: Column index of best move, or None
-        - statistics_dict: Dictionary with 'total_visits' and 'children_stats'
-    """
-    # If game is over, return None and empty stats
-    if root_state.is_terminal():
-        return None, {}
-    
-    # Remember which player is searching
-    root_player = root_state.current_player
-    
-    # Create root node for the search tree
-    root_node = MCTSNode(root_state.clone())
-    
-    # Run MCTS iterations (same as regular search)
-    for _ in range(iterations):
-        node = root_node
-        state = root_state.clone()
-        
-        # SELECTION: Walk down tree using UCB1
-        while node.is_fully_expanded() and not node.is_terminal():
-            node = node.select_child_uct()
-            state.make_move(node.move)
-        
-        # EXPANSION: Add a new child if possible
-        if not node.is_terminal() and not node.is_fully_expanded():
-            node = node.expand()
-            state = node.state.clone()
-        
-        # SIMULATION: Random playout
-        result = simulate_random_playout(state, root_player)
-        
-        # BACKPROPAGATION: Update nodes with result
-        while node is not None:
-            if node.state.current_player == root_player:
-                node.update(result)
-            else:
-                node.update(1.0 - result)
-            node = node.parent
-    
-    # Select the best move using robust selection
-    best_child = root_node.best_child(exploration_weight=0)
-    
-    # === GATHER STATISTICS ===
-    # Build a dictionary with information about the search
-    
-    stats = {
-        'total_visits': root_node.visits,  # How many iterations reached the root
-        'children_stats': []               # List of stats for each child
-    }
-    
-    # For each child (each possible move from root), record its statistics
-    for child in root_node.children:
-        child_info = {
-            'move': child.move,                                    # Which column
-            'visits': child.visits,                                # Times visited
-            'wins': child.wins,                                    # Total reward
-            'win_rate': child.wins / child.visits if child.visits > 0 else 0  # Average reward
-        }
-        stats['children_stats'].append(child_info)
-    
-    # Return both the best move and the statistics
-    return best_child.move if best_child else None, stats
 
 
 # ============================================================
@@ -906,7 +835,7 @@ def main():
                 if state.current_player == PLAYER2:
                     # Run MCTS to find the best move
                     # Use 2000 iterations for strong play
-                    ai_move = mcts_search(state, iterations=2000)
+                    ai_move = mcts_search(state, iterations=3000)
                     
                     # If MCTS found a move, apply it
                     if ai_move is not None:
