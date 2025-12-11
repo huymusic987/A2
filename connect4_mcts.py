@@ -165,6 +165,85 @@ After running thousands of iterations:
 Key insight: Random playouts + statistics = surprisingly good moves!
 """
 
+def is_immediate_loss(state, move, player): 
+    """ 
+    Check if playing move causes an immediate forced loss. i.e., 
+    opponent wins on their next move. 
+    """ 
+    tmp = state.clone() 
+    tmp.make_move(move) 
+
+    opp = 1 if player == 2 else 2 
+    
+    for c in tmp.get_legal_moves(): 
+        test = tmp.clone() 
+        test.make_move(c) 
+        if test.check_winner() == opp: 
+            return True 
+    return False
+
+def get_drop_row(board, col): 
+    """Return the row index where a piece would land in column col, or None if full.""" 
+    for r in range(ROWS - 1, -1, -1):  
+        if board[r][col] == EMPTY: 
+            return r 
+    return None
+
+def is_winning_move_board(board, col, player):
+    """Check if dropping `player` into `col` on given board makes a 4."""
+    r = get_drop_row(board, col)
+    if r is None:
+        return False
+
+    # Temporarily place the piece and test four-in-a-row
+    board[r][col] = player
+    win = False
+
+    # --- Horizontal ---
+    c0 = max(0, col - 3)
+    c1 = min(COLS - 1, col + 3)
+    for c in range(c0, c1 - 2):
+        if all(board[r][c + i] == player for i in range(4)):
+            win = True
+            break
+
+    # --- Vertical ---
+    if not win:
+        r0 = max(0, r - 3)
+        r1 = min(ROWS - 1, r + 3)
+        for rr in range(r0, r1 - 2):
+            if all(board[rr + i][col] == player for i in range(4)):
+                win = True
+                break
+
+    # --- Diagonal down-right ( \ ) ---
+    # Fixed: Ensure rr and rr+3 are both in bounds
+    if not win:
+        for dr in range(-3, 1):
+            rr = r + dr
+            cc = col + dr
+            # CORRECTED: Check that starting position and ending position are valid
+            if 0 <= rr and rr + 3 < ROWS and 0 <= cc and cc + 3 < COLS:
+                if all(board[rr + i][cc + i] == player for i in range(4)):
+                    win = True
+                    break
+
+    # --- Diagonal up-right ( / ) ---
+    # Fixed: Ensure rr-3 through rr are all in bounds
+    if not win:
+        for dr in range(-3, 1):
+            rr = r - dr  # Row decreases as column increases
+            cc = col + dr
+            # CORRECTED: Check that rr-3 >= 0 (so rr >= 3) and cc+3 < COLS
+            if rr >= 3 and rr < ROWS and 0 <= cc and cc + 3 < COLS:
+                if all(board[rr - i][cc + i] == player for i in range(4)):
+                    win = True
+                    break
+
+    # Remove temporary piece
+    board[r][col] = EMPTY
+    return win
+
 class MCTSNode:
     """
     Node in the MCTS tree.
@@ -236,7 +315,7 @@ class MCTSNode:
         This is the heart of MCTS selection. The UCB1 formula is:
         
             UCB1 = (wins/visits) + c * sqrt(ln(parent_visits) / visits)
-                   \___ exploit__/   \_______ explore ___________/
+                      exploit                    explore
         
         - EXPLOITATION (wins/visits): Prefer children with high win rates
         - EXPLORATION (sqrt term): Prefer children we haven't visited much
@@ -293,67 +372,57 @@ class MCTSNode:
     
     def expand(self):
         """
-        Expand the node by creating a child for one untried move.
-        
-        This is the EXPANSION phase of MCTS. When we reach a node during
-        selection that still has untried moves, we:
-        1. Pick one untried move randomly
-        2. Remove it from untried_moves (so we don't try it again)
-        3. Create a new game state by applying this move
-        4. Create a new child node with this state
-        5. Add the child to our children list
-        
-        Returns:
-            The newly created child node, or None if no moves to expand
+        Expand using only two heuristics:
+        1. Avoid immediate losing moves.
+        2. Play immediate winning move if available.
+
+        No center bias, no fork logic, no extra heuristics.
         """
-        # If there are no untried moves, we can't expand
         if not self.untried_moves:
             return None
-        
-        # Pick a random untried move
-        # We could be smarter here (e.g., prioritize center columns),
-        # but random selection works well and keeps the algorithm general
-        move = random.choice(self.untried_moves)
-        
-        # Remove this move from untried list so we don't try it again
+
+        player = self.state.current_player
+
+        # First: check if any untried move is an immediate win
+        for m in self.untried_moves:
+            board_copy = [row[:] for row in self.state.board]
+            if is_winning_move_board(board_copy, m, player):
+                move = m
+                self.untried_moves.remove(move)
+                new_state = self.state.clone()
+                new_state.make_move(move)
+                child = MCTSNode(new_state, parent=self, move=move)
+                self.children.append(child)
+                return child
+
+        # Second: filter out moves that cause immediate loss
+        safe_moves = [m for m in self.untried_moves
+                    if not is_immediate_loss(self.state, m, player)]
+
+        candidate_moves = safe_moves if safe_moves else self.untried_moves
+
+        # Choose randomly among remaining candidates
+        move = random.choice(candidate_moves)
         self.untried_moves.remove(move)
-        
-        # Create a new game state by cloning current state and applying the move
+
         new_state = self.state.clone()
         new_state.make_move(move)
-        
-        # Create a new node for this child state
-        child_node = MCTSNode(new_state, parent=self, move=move)
-        
-        # Add to our list of children
-        self.children.append(child_node)
-        
-        # Return the new child so we can simulate from it
-        return child_node
+
+        child = MCTSNode(new_state, parent=self, move=move)
+        self.children.append(child)
+        return child
     
-    def best_child(self, exploration_weight=0):
+    def best_child(self):
         """
         Select the best child for final move selection.
         
         After MCTS finishes all iterations, we need to pick which move to actually play.
         There are different strategies:
         
-        1. ROBUST CHILD (exploration_weight=0): Pick the most visited child
+        Pick the most visited child
            - Most visits = most confidence in this move
            - This is the recommended approach and works best in practice
            - Less affected by random variance in win rates
-        
-        2. MAX CHILD: Pick the child with highest win rate
-           - Can be misled by lucky wins in small sample sizes
-           - Not recommended for final selection
-        
-        3. ROBUST-MAX: Mix of visits and win rate
-           - Use exploration_weight > 0 to still apply UCT
-           - Rarely used for final selection
-        
-        Arguments:
-            exploration_weight: If 0, use pure visit count (robust child)
-                               If >0, use UCT with this exploration weight
         
         Returns:
             The best child node, or None if no children exist
@@ -362,14 +431,9 @@ class MCTSNode:
         if not self.children:
             return None
         
-        if exploration_weight == 0:
-            # ROBUST CHILD selection: return the most visited child
-            # This is the standard final selection method
-            return max(self.children, key=lambda c: c.visits)
-        else:
-            # Use UCT with custom exploration weight
-            # This is rarely used but available for experimentation
-            return self.select_child_uct(exploration_weight)
+        # return the most visited child
+        # This is the standard final selection method
+        return max(self.children, key=lambda c: c.visits)
     
     def update(self, result):
         """
@@ -442,13 +506,6 @@ def simulate_random_playout(state, player):
     3. Continue until someone wins or the board is full
     4. Return the result from the given player's perspective
     
-    Why random moves?
-    - It's fast! We can do thousands of simulations quickly
-    - It's unbiased - doesn't favor any particular strategy
-    - Surprisingly, random playouts + statistics = good moves!
-    - For stronger play, you could use "heavy playouts" with heuristics,
-      but that's slower and often not worth the cost
-    
     Arguments:
         state: Connect4State to simulate from (will be cloned, not modified)
         player: The player from whose perspective we want the result
@@ -479,7 +536,7 @@ def simulate_random_playout(state, player):
     return evaluate_terminal_state(simulation_state, player)
 
 
-def mcts_search(root_state, iterations=1000, exploration_constant=1.414):
+def mcts_search(root_state, iterations=400, exploration_constant=1.414):
     """
     Execute Monte Carlo Tree Search to find the best move.
     
@@ -573,27 +630,24 @@ def mcts_search(root_state, iterations=1000, exploration_constant=1.414):
         # Start from the node we just simulated from
         # and work our way back to the root
         while node is not None:
-            # The result is from root_player's perspective
-            # But each node stores wins from ITS player's perspective
-            
-            # If this node's player is the root player,
-            # add the result directly
-            # player who made the move into this node
-            player_who_moved = PLAYER1 if node.state.current_player == PLAYER2 else PLAYER2
-
-            if player_who_moved == root_player:
+            # Determine who moved to create this node
+            if node.parent is None:
+                # Root node - use root_player's perspective
                 node.update(result)
             else:
-                node.update(1.0 - result)
-
-            # Move up to the parent
+                # Check who was to move at the parent (they made the move to create this node)
+                if node.parent.state.current_player == root_player:
+                    node.update(result)
+                else:
+                    node.update(1.0 - result)
+    
             node = node.parent
     
     # === FINAL MOVE SELECTION ===
     # After all iterations, pick the best child using robust selection
     # (most visited child, not highest win rate)
     
-    best_child = root_node.best_child(exploration_weight=0)
+    best_child = root_node.best_child()
     
     # If we somehow have no children (shouldn't happen), return None
     if best_child is None:
@@ -834,8 +888,7 @@ def main():
                 # Player vs AI mode: AI plays as Player 2 (yellow)
                 if state.current_player == PLAYER2:
                     # Run MCTS to find the best move
-                    # Use 2000 iterations for strong play
-                    ai_move = mcts_search(state, iterations=3000)
+                    ai_move = mcts_search(state)
                     
                     # If MCTS found a move, apply it
                     if ai_move is not None:
@@ -855,10 +908,13 @@ def main():
             
             elif mode == 2:
                 # AI vs AI mode: Both players use MCTS
+                if state.current_player == 1:
+                    print("Player 1 (AI) is thinking...")
+                else:
+                    print("Player 2 (AI) is thinking...")
                 
                 # Run MCTS for current player
-                # Use 1500 iterations (balanced speed vs strength)
-                ai_move = mcts_search(state, iterations=1500)
+                ai_move = mcts_search(state)
                 
                 # Apply the move
                 if ai_move is not None:
