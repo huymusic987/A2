@@ -17,18 +17,22 @@ WINDOW_WIDTH = GRID_WIDTH + PANEL_WIDTH
 WINDOW_HEIGHT = GRID_HEIGHT
 
 # Colors in RGB format
-COLOR_BG = (30, 30, 40)
-COLOR_GRID = (60, 60, 70)
-COLOR_WALL = (40, 40, 120)
-COLOR_START = (0, 200, 0)
-COLOR_GOAL = (200, 0, 0)
-COLOR_PATH = (250, 220, 120)
-COLOR_CLOSED = (120, 0, 120)
-COLOR_TEXT = (230, 230, 230)
-COLOR_PANEL = (25, 25, 35)
-COLOR_BUTTON = (50, 50, 80)
-COLOR_BUTTON_HOVER = (70, 70, 100)
-COLOR_BUTTON_ACTIVE = (90, 120, 90)
+COLOR_BG = (15, 18, 25)                 # dark grid background
+COLOR_GRID = (50, 55, 75)              # subtle grid lines
+
+COLOR_WALL = (45, 50, 70)              # wall cells
+COLOR_START = (70, 200, 170)           # teal start node
+COLOR_GOAL = (220, 70, 70)             # red goal node
+
+COLOR_CLOSED = (60, 60, 90)            # explored cells
+COLOR_PATH = (0, 230, 255)             # neon cyan path
+
+COLOR_TEXT = (240, 240, 240)           # main text (panel)
+COLOR_PANEL = (12, 12, 16)             # matte black control panel
+
+COLOR_BUTTON = (30, 35, 50)            # button idle
+COLOR_BUTTON_HOVER = (50, 60, 90)      # button hover
+COLOR_BUTTON_ACTIVE = (0, 200, 220)    # active button (cyan)
 
 WHITE = (240, 240, 240)  # text and highlights
 GREEN = (90, 220, 120)   # frog color
