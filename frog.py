@@ -85,7 +85,7 @@ class Frog:
     
         if self.path_index < len(self.path) - 1:
             dist_to_waypoint = (self.pos - waypoint).length()
-            turn_detection_distance = 60  # Detect turns within this distance
+            turn_detection_distance = 75  # Detect turns within this distance
         
             if dist_to_waypoint < turn_detection_distance:
                 is_turning = True

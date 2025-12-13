@@ -41,6 +41,7 @@ show_g_scores = True
 
 # Movement settings
 allow_diagonal = True
+heuristic_mode = "octile"
 
 
 # --------------------------
@@ -122,41 +123,64 @@ def draw_grid(surface):
 # --------------------------
 
 def heuristic(a, b):
-    """Diagonal distance heuristic for A*."""
     r1, c1 = a
     r2, c2 = b
-    
+
     dr = abs(r1 - r2)
     dc = abs(c1 - c2)
-    
-    if allow_diagonal:
-        diagonal = min(dr, dc)
-        straight = max(dr, dc) - diagonal
-        return diagonal * math.sqrt(2) + straight
-    else:
-        return dr + dc  # Manhattan distance
+
+    if heuristic_mode == "manhattan":
+        return dr + dc
+
+    # octile (diagonal distance)
+    diagonal = min(dr, dc)
+    straight = max(dr, dc) - diagonal
+    return diagonal * math.sqrt(2) + straight
+
+def set_manhattan():
+    global heuristic_mode
+    heuristic_mode = "manhattan"
+    reset_search()
+
+def set_octile():
+    global heuristic_mode
+    heuristic_mode = "octile"
+    reset_search()
 
 def get_neighbors(cell):
-    """Return valid neighbor cells."""
-    (r, c) = cell
+    r, c = cell
     neighbors = []
 
-    if allow_diagonal:
-        # 8 directions
-        directions = [
-            (-1, 0), (1, 0), (0, -1), (0, 1),
-            (-1, -1), (-1, 1), (1, -1), (1, 1)
-        ]
-    else:
-        # 4 cardinal directions only
-        directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
-
-    for dr, dc in directions:
-        nr = r + dr
-        nc = c + dc
+    # Cardinal directions
+    cardinals = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+    for dr, dc in cardinals:
+        nr, nc = r + dr, c + dc
         if 0 <= nr < ROWS and 0 <= nc < COLS:
             if (nr, nc) not in walls:
                 neighbors.append((nr, nc))
+
+    if not allow_diagonal:
+        return neighbors
+
+    # Diagonals with corner-cutting prevention
+    diagonals = [
+        (-1, -1), (-1, 1),
+        (1, -1),  (1, 1)
+    ]
+
+    for dr, dc in diagonals:
+        nr, nc = r + dr, c + dc
+        if not (0 <= nr < ROWS and 0 <= nc < COLS):
+            continue
+
+        if (nr, nc) in walls:
+            continue
+
+        # Adjacent cardinals must be free
+        if (r + dr, c) in walls or (r, c + dc) in walls:
+            continue
+
+        neighbors.append((nr, nc))
 
     return neighbors
 
@@ -266,19 +290,6 @@ class Button:
             return True
         return False
 
-def toggle_diagonal():
-    global allow_diagonal
-    allow_diagonal = not allow_diagonal
-    reset_search()
-
-def toggle_panel():
-    global PANEL_OPEN, WINDOW_WIDTH
-    PANEL_OPEN = not PANEL_OPEN
-    if PANEL_OPEN:
-        WINDOW_WIDTH = GRID_WIDTH + PANEL_WIDTH
-    else:
-        WINDOW_WIDTH = GRID_WIDTH
-
 def draw_control_panel(surface, font, small_font, buttons):
     """Draw the control panel on the right side."""
     if not PANEL_OPEN:
@@ -345,17 +356,25 @@ def draw_control_panel(surface, font, small_font, buttons):
     surface.blit(settings_title, (panel_x + 10, y_offset))
     y_offset += 30
     
-    movement_text = small_font.render(f"Movement:", True, COLOR_TEXT)
-    surface.blit(movement_text, (panel_x + 15, y_offset))
-    
-    mode_text = "8-directional" if allow_diagonal else "4-directional"
-    mode_render = small_font.render(f"({mode_text})", True, (150, 200, 150))
-    surface.blit(mode_render, (panel_x + 90, y_offset))
-    y_offset += 10
+    y_offset += 20
+
+    heuristic_label = small_font.render("Heuristic:", True, COLOR_TEXT)
+    surface.blit(heuristic_label, (panel_x + 15, y_offset))
+
+    heuristic_value = small_font.render(
+        heuristic_mode.capitalize(),
+        True,
+        (150, 200, 150)
+    )
+    surface.blit(heuristic_value, (panel_x + 100, y_offset))
     
     # Draw buttons
     for button in buttons:
-        button.draw(surface, small_font, active=(button.text == "Allow Diagonal Movement" and allow_diagonal))
+        active = (
+            (button.text == "Manhattan" and heuristic_mode == "manhattan") or
+            (button.text == "Octile" and heuristic_mode == "octile")
+        )
+        button.draw(surface, small_font, active=active)
 
 def reset_search():
     """Reset path and closed set when map changes."""
@@ -387,7 +406,8 @@ def main():
     # Create buttons
     panel_x = GRID_WIDTH
     buttons = [
-        Button(panel_x + 20, 370, 210, 35, "Allow Diagonal Movement", toggle_diagonal),
+        Button(panel_x + 20, 400, 210, 35, "Manhattan", set_manhattan),
+        Button(panel_x + 20, 445, 210, 35, "Octile", set_octile),
     ]
 
     running = True
@@ -407,6 +427,14 @@ def main():
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_SPACE:
                     run_astar()
+                    frog.pos = V2(
+                        start[1] * CELL_SIZE + CELL_SIZE / 2,
+                        start[0] * CELL_SIZE + CELL_SIZE / 2
+                    )
+                    frog.vel = V2()
+                    frog.path = []
+                    frog.path_index = 0
+                    frog.target = frog.pos                   
                     if current_path:
                         frog.set_path(current_path)
                 elif event.key == pygame.K_r:
@@ -443,15 +471,41 @@ def main():
                     if event.button == 1:  # Left click
                         if cell == start or cell == goal:
                             pass
+
                         elif cell in walls:
+                            # Remove wall → NO frog reset
                             walls.remove(cell)
+                            reset_search()
+
                         else:
+                            # Add wall → reset frog to start
                             walls.add(cell)
-                        reset_search()
+                            reset_search()
+
+                            frog.pos = V2(
+                                start[1] * CELL_SIZE + CELL_SIZE / 2,
+                                start[0] * CELL_SIZE + CELL_SIZE / 2
+                            )
+                            frog.vel = V2()
+                            frog.path = []
+                            frog.path_index = 0
+                            frog.target = frog.pos
+
+
                     elif event.button == 3:  # Right click
                         if cell != goal:
                             start = cell
                             reset_search()
+
+                        # Stick frog to new start
+                        frog.pos = V2(
+                            start[1] * CELL_SIZE + CELL_SIZE / 2,
+                            start[0] * CELL_SIZE + CELL_SIZE / 2
+                        )
+                        frog.vel = V2()
+                        frog.path = []
+                        frog.path_index = 0
+                        frog.target = frog.pos
                     elif event.button == 2:  # Middle click
                         if cell != start:
                             goal = cell
@@ -463,7 +517,8 @@ def main():
         screen.fill(COLOR_BG)
         draw_grid(screen)
         draw_control_panel(screen, font, small_font, buttons)
-        frog.draw(screen)
+        if current_path:
+            frog.draw(screen)
 
         pygame.display.flip()
 

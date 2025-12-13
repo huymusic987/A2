@@ -37,8 +37,12 @@ HINT_COLOR = (0, 230, 255)          # neon highlight
 PANEL_COLOR = (18, 18, 22)          # matte side panel
 HEADER_COLOR = (55, 90, 140)        # steel-blue headers
 
+EMPTY_SLOT_COLOR = (30, 30, 40)     # visible dark gray-blue
+EMPTY_SLOT_BORDER = (90, 90, 120)   # subtle outline
+WIN_HIGHLIGHT = (255, 215, 0)       # gold
+
 STATS_PANEL_WIDTH = 400
-WIDTH = COLS * SQUARESIZE + STATS_PANEL_WIDTH
+WIDTH = COLS * SQUARESIZE + STATS_PANEL_WIDTH + 10
 HEIGHT = (ROWS + 2) * SQUARESIZE
 SIZE = (WIDTH, HEIGHT)
 
@@ -78,14 +82,15 @@ class Connect4State:
                 return True
         return False
 
-    def check_winner(self):
+    def check_winner(self, return_positions=False):
         # Horizontal
         for r in range(ROWS):
             for c in range(COLS - 3):
                 piece = self.board[r][c]
                 if piece != EMPTY:
                     if all(self.board[r][c + i] == piece for i in range(4)):
-                        return piece
+                        positions = [(r, c + i) for i in range(4)]
+                        return (piece, positions) if return_positions else piece
 
         # Vertical
         for c in range(COLS):
@@ -93,7 +98,8 @@ class Connect4State:
                 piece = self.board[r][c]
                 if piece != EMPTY:
                     if all(self.board[r + i][c] == piece for i in range(4)):
-                        return piece
+                        positions = [(r + i, c) for i in range(4)]
+                        return (piece, positions) if return_positions else piece
 
         # Diagonal (top-left to bottom-right)
         for r in range(ROWS - 3):
@@ -101,7 +107,8 @@ class Connect4State:
                 piece = self.board[r][c]
                 if piece != EMPTY:
                     if all(self.board[r + i][c + i] == piece for i in range(4)):
-                        return piece
+                        positions = [(r + i, c + i) for i in range(4)]
+                        return (piece, positions) if return_positions else piece
 
         # Diagonal (bottom-left to top-right)
         for r in range(3, ROWS):
@@ -109,9 +116,10 @@ class Connect4State:
                 piece = self.board[r][c]
                 if piece != EMPTY:
                     if all(self.board[r - i][c + i] == piece for i in range(4)):
-                        return piece
+                        positions = [(r - i, c + i) for i in range(4)]
+                        return (piece, positions) if return_positions else piece
 
-        return None
+        return (None, []) if return_positions else None
 
     def is_full(self):
         return all(self.board[0][c] != EMPTY for c in range(COLS))
@@ -286,7 +294,7 @@ def mcts_search(root_state, iterations=1000, exploration_constant=1.414):
 #             DRAWING THE GAME WITH PYGAME
 # ============================================================
 
-def draw_stats_panel(screen, font, small_font, tiny_font, stats, column_stats, selected_col):
+def draw_stats_panel(screen, font, tiny_font, small_font, stats, column_stats, selected_col):
     """Draw the statistics panel on the right side"""
     panel_x = COLS * SQUARESIZE
 
@@ -313,16 +321,16 @@ def draw_stats_panel(screen, font, small_font, tiny_font, stats, column_stats, s
         sel_visits = stats.get('selected_visits', 0)
         total_sims = stats.get('total_simulations', 0)
 
-        selected_text = tiny_font.render(f"SELECTED: Column {sel_move}] Win Rate: {sel_wr:.1f}% | Visits: {sel_visits}", True, HINT_COLOR)
+        selected_text = small_font.render(f"SELECTED: Column {sel_move}] Win Rate: {sel_wr:.1f}% | Visits: {sel_visits}", True, HINT_COLOR)
         screen.blit(selected_text, (panel_x + 20, y_offset))
         y_offset += 20
 
-        total_text = tiny_font.render(f"Total Simulations: {total_sims}", True, TEXT_COLOR)
+        total_text = small_font.render(f"Total Simulations: {total_sims}", True, TEXT_COLOR)
         screen.blit(total_text, (panel_x + 20, y_offset))
         y_offset += 25
 
         # Display all moves considered
-        all_moves_text = tiny_font.render("All Moves Considered:", True, TEXT_COLOR)
+        all_moves_text = small_font.render("All Moves Considered:", True, TEXT_COLOR)
         screen.blit(all_moves_text, (panel_x + 20, y_offset))
         y_offset += 20
 
@@ -335,7 +343,7 @@ def draw_stats_panel(screen, font, small_font, tiny_font, stats, column_stats, s
             # Highlight if this is the selected move
             color = HINT_COLOR if col == sel_move else TEXT_COLOR
 
-            move_text = tiny_font.render(f"* Col {col}: {wr:.1f}% | UCB1 {ucb:.3f} ({visits})", True, color)
+            move_text = small_font.render(f"* Col {col}: {wr:.1f}% | UCB1 {ucb:.3f} ({visits})", True, color)
             screen.blit(move_text, (panel_x + 25, y_offset))
             y_offset += 18
     else:
@@ -364,7 +372,7 @@ def draw_stats_panel(screen, font, small_font, tiny_font, stats, column_stats, s
 
     for col in range(COLS):
         # Column label
-        col_text = tiny_font.render(f"Col {col}:", True, TEXT_COLOR)
+        col_text = small_font.render(f"Col {col}:", True, TEXT_COLOR)
         screen.blit(col_text, (panel_x + 20, y_offset + 5))
 
         bar_x = panel_x + 70
@@ -395,7 +403,7 @@ def draw_stats_panel(screen, font, small_font, tiny_font, stats, column_stats, s
             # Player 1 portion (red)
             if p1_width > 0:
                 pygame.draw.rect(screen, PLAYER1_COLOR, (bar_x, y_offset, p1_width, bar_height))
-            # Player 2 portion (yellow)
+            # Player 2 portion (Cyan)
             if p2_width > 0:
                 pygame.draw.rect(screen, PLAYER2_COLOR, (bar_x + p1_width, y_offset, p2_width, bar_height))
 
@@ -407,20 +415,20 @@ def draw_stats_panel(screen, font, small_font, tiny_font, stats, column_stats, s
                 pygame.draw.rect(screen, HINT_COLOR, (bar_x, y_offset, bar_width, bar_height), 2)
 
             # Percentages (rounded)
-            pct_text = tiny_font.render(f"{p1_pct:.0f}% / {p2_pct:.0f}%", True, TEXT_COLOR)
+            pct_text = small_font.render(f"{p1_pct:.0f}% / {p2_pct:.0f}%", True, TEXT_COLOR)
             screen.blit(pct_text, (bar_x + bar_width + 10, y_offset + 5))
         else:
             # No data yet
             pygame.draw.rect(screen, (60, 60, 60), (bar_x, y_offset, bar_width, bar_height))
             pygame.draw.rect(screen, TEXT_COLOR, (bar_x, y_offset, bar_width, bar_height), 1)
 
-            no_data = tiny_font.render("No data", True, (150, 150, 150))
+            no_data = small_font.render("No data", True, (150, 150, 150))
             screen.blit(no_data, (bar_x + bar_width + 10, y_offset + 5))
 
         y_offset += 30
 
 
-def draw_board(screen, state, font, small_font, tiny_font, message="", stats=None, selected_col=None):
+def draw_board(screen, state, font, small_font, message="", stats=None, selected_col=None, win_positions=[]):
     """Draw the game board and stats panel"""
     screen.fill(BG_COLOR)
     
@@ -437,12 +445,13 @@ def draw_board(screen, state, font, small_font, tiny_font, message="", stats=Non
                 (c * SQUARESIZE, (r + 2) * SQUARESIZE, SQUARESIZE, SQUARESIZE)
             )
             
-            pygame.draw.circle(
-                screen,
-                BG_COLOR,
-                (c * SQUARESIZE + SQUARESIZE // 2, (r + 2) * SQUARESIZE + SQUARESIZE // 2),
-                RADIUS
+            center = (
+                c * SQUARESIZE + SQUARESIZE // 2,
+                (r + 2) * SQUARESIZE + SQUARESIZE // 2
             )
+
+            pygame.draw.circle(screen, EMPTY_SLOT_COLOR, center, RADIUS)
+            pygame.draw.circle(screen, EMPTY_SLOT_BORDER, center, RADIUS, 2)
     
     # Draw pieces
     for c in range(COLS):
@@ -458,11 +467,21 @@ def draw_board(screen, state, font, small_font, tiny_font, message="", stats=Non
                     (c * SQUARESIZE + SQUARESIZE // 2, (r + 2) * SQUARESIZE + SQUARESIZE // 2),
                     RADIUS
                 )
+
+    if win_positions:
+        for r, c in win_positions:
+            center = (
+                c * SQUARESIZE + SQUARESIZE // 2,
+                (r + 2) * SQUARESIZE + SQUARESIZE // 2
+            )
+
+            pygame.draw.circle(screen, WIN_HIGHLIGHT, center, RADIUS + 4, 4)
+
     
     # Draw stats panel
     if stats is None:
         stats = {}
-    draw_stats_panel(screen, font, small_font, tiny_font, stats, column_stats, selected_col)
+    draw_stats_panel(screen, font, small_font, small_font, stats, column_stats, selected_col)
     
     pygame.display.update()
 
@@ -495,7 +514,7 @@ def main():
     
     font = pygame.font.SysFont("arial", 24)
     small_font = pygame.font.SysFont("arial", 18)
-    tiny_font = pygame.font.SysFont("arial", 14)
+    small_font = pygame.font.SysFont("arial", 14)
     
     # Mode selection
     mode = None
@@ -528,6 +547,7 @@ def main():
     message = "Red turn"
     stats = {}
     last_move = None
+    win_positions = []
     
     running = True
     while running:
@@ -554,9 +574,11 @@ def main():
                         last_move = col
                         state.make_move(col)
                         
-                        winner = state.check_winner()
+                        winner, winning_positions = state.check_winner(return_positions=True)
+                        win_positions = winning_positions
+
                         if winner:
-                            message = "Red wins! Press R to restart" if winner == PLAYER1 else "Yellow wins! Press R to restart"
+                            message = "Red wins! Press R to restart" if winner == PLAYER1 else "Cyan wins! Press R to restart"
                             game_over = True
                             if last_move is not None:
                                 update_column_stats(last_move, winner)
@@ -575,9 +597,11 @@ def main():
                         last_move = ai_move
                         state.make_move(ai_move)
                         
-                        winner = state.check_winner()
+                        winner, winning_positions = state.check_winner(return_positions=True)
+                        win_positions = winning_positions
+
                         if winner:
-                            message = "Red wins! Press R to restart" if winner == PLAYER1 else "Yellow wins! Press R to restart"
+                            message = "Red wins! Press R to restart" if winner == PLAYER1 else "Cyan wins! Press R to restart"
                             game_over = True
                             if last_move is not None:
                                 update_column_stats(last_move, winner)
@@ -595,9 +619,11 @@ def main():
                     current_player = state.current_player
                     state.make_move(ai_move)
                     
-                    winner = state.check_winner()
+                    winner, winning_positions = state.check_winner(return_positions=True)
+                    win_positions = winning_positions
+
                     if winner:
-                        message = "Red wins! Press R to restart" if winner == PLAYER1 else "Yellow wins! Press R to restart"
+                        message = "Red wins! Press R to restart" if winner == PLAYER1 else "Cyan wins! Press R to restart"
                         game_over = True
                         if last_move is not None:
                             update_column_stats(last_move, winner)
@@ -605,11 +631,11 @@ def main():
                         message = "Draw! Press R to restart"
                         game_over = True
                     else:
-                        message = "Red turn" if state.current_player == PLAYER1 else "Yellow turn"
+                        message = "Red turn" if state.current_player == PLAYER1 else "Cyan turn"
                 
                 pygame.time.wait(500)
         
-        draw_board(screen, state, font, small_font, tiny_font, message, stats, last_move)
+        draw_board(screen, state, font, small_font, message, stats, last_move, win_positions)
     
     pygame.quit()
     sys.exit()
