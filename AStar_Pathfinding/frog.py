@@ -54,16 +54,12 @@ class Frog:
 
 
     def update(self, dt):
-        # ---------------------------------------------------------
-        # 1. If NO PATH → do nothing (stay still)
-        # ---------------------------------------------------------
+        # If NO PATH → do nothing (stay still)
         if not self.path or self.path_index >= len(self.path):
             self.vel = V2()   # ensure fully stopped
             return
 
-        # ---------------------------------------------------------
-        # 2. PATH FOLLOWING → get current waypoint
-        # ---------------------------------------------------------
+        # PATH FOLLOWING → get current waypoint
         waypoint = self.path[self.path_index]
 
         # If close enough, advance to next waypoint
@@ -77,9 +73,7 @@ class Frog:
 
             waypoint = self.path[self.path_index]
 
-        # ---------------------------------------------------------
-        # 3. Detect if we're approaching a turn
-        # ---------------------------------------------------------
+        # Detect if we're approaching a turn
         is_turning = False
         steer_multiplier = 1.0
     
@@ -89,12 +83,10 @@ class Frog:
         
             if dist_to_waypoint < turn_detection_distance:
                 is_turning = True
-                # Boost steering力 during turns for sharper response
-                steer_multiplier = 2.5  # Increase for even sharper turns
+                # Boost steering during turns for sharper response
+                steer_multiplier = 2.5
 
-        # ---------------------------------------------------------
-        # 4. Steering
-        # ---------------------------------------------------------
+        # Steering
         if self.path_index == len(self.path) - 2:
             steer = arrive(self.pos, self.vel, waypoint, self.speed)
         else:
@@ -106,9 +98,7 @@ class Frog:
 
         self.target = waypoint
 
-        # ---------------------------------------------------------
-        # 5. Integrate velocity + move frog
-        # ---------------------------------------------------------
+        # Integrate velocity + move frog
         self.vel = integrate_velocity(self.vel, steer, dt, self.speed)
         self.pos += self.vel * dt
 

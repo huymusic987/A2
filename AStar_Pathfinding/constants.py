@@ -1,7 +1,3 @@
-# --------------------------
-# Grid and window settings
-# --------------------------
-
 ROWS = 20
 COLS = 30
 CELL_SIZE = 40
@@ -17,7 +13,7 @@ WINDOW_WIDTH = GRID_WIDTH + PANEL_WIDTH
 WINDOW_HEIGHT = GRID_HEIGHT
 
 # Colors in RGB format
-COLOR_BG = (15, 18, 25)                 # dark grid background
+COLOR_BG = (15, 18, 25)                # dark grid background
 COLOR_GRID = (50, 55, 75)              # subtle grid lines
 
 COLOR_WALL = (45, 50, 70)              # wall cells
@@ -34,7 +30,7 @@ COLOR_BUTTON = (30, 35, 50)            # button idle
 COLOR_BUTTON_HOVER = (50, 60, 90)      # button hover
 COLOR_BUTTON_ACTIVE = (0, 200, 220)    # active button (cyan)
 
-WHITE = (240, 240, 240)  # text and highlights
-GREEN = (90, 220, 120)   # frog color
+WHITE = (240, 240, 240)   # text and highlights
+GREEN = (90, 220, 120)    # frog color
 FROG_RADIUS = 16          # draw size and collision size for the frog
 FROG_SPEED  = 100.0       # top speed for the frog in pixels per second

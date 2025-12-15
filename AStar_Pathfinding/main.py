@@ -1,14 +1,3 @@
-"""
-Complete A* pathfinding playground with control panel.
-
-Controls:
-  - Left click: toggle wall on or off on a cell.
-  - Right click: set the start cell.
-  - Middle click: set the goal cell.
-  - Space key: run A* from start to goal and draw the path.
-  - Escape or window close: quit the program.
-"""
-
 import sys
 import heapq
 import pygame
@@ -42,11 +31,6 @@ show_g_scores = True
 # Movement settings
 allow_diagonal = True
 heuristic_mode = "octile"
-
-
-# --------------------------
-# Helper functions for grid
-# --------------------------
 
 def cell_from_mouse(pos):
     """Convert mouse pixel position to grid cell coordinates."""
@@ -116,11 +100,6 @@ def draw_grid(surface):
                 shadow_rect = shadow.get_rect(center=(x + CELL_SIZE // 2 + 1, y + CELL_SIZE // 2 + 1))
                 surface.blit(shadow, shadow_rect)
                 surface.blit(cost_text, text_rect)
-
-
-# --------------------------
-# A* algorithm helpers
-# --------------------------
 
 def heuristic(a, b):
     r1, c1 = a
@@ -253,10 +232,6 @@ def run_astar():
     current_path = None
     current_closed = closed_set
     g_scores = g_score.copy()
-
-# --------------------------
-# Control Panel UI
-# --------------------------
 
 class Button:
     def __init__(self, x, y, w, h, text, action=None):
