@@ -761,7 +761,7 @@ def draw_board(screen, state, font, small_font, message="", stats=None, selected
     # Draw statistics panel on right side
     if stats is None:
         stats = {}
-    draw_stats_panel(screen, font, small_font, small_font, stats, column_stats, selected_col)
+    draw_stats_panel(screen, font, small_font, stats, column_stats, selected_col)
     
     # Update display
     pygame.display.update()
@@ -792,7 +792,28 @@ def reset_column_stats():
     column_stats = {col: {"player1_wins": 0, "player2_wins": 0} for col in range(COLS)}
 
 
-#              MAIN GAME LOOP
+def menu_loop(screen, font):
+    while True:
+        screen.fill(BG_COLOR)
+
+        t1 = font.render("Press 1 for Player vs AI", True, TEXT_COLOR)
+        t2 = font.render("Press 2 for AI vs AI", True, TEXT_COLOR)
+        screen.blit(t1, (50, 100))
+        screen.blit(t2, (50, 150))
+        pygame.display.update()
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_1:
+                    return 1
+                elif event.key == pygame.K_2:
+                    return 2
+
+#  MAIN GAME LOOP
 
 def main():
     """
@@ -818,38 +839,19 @@ def main():
     
     font = pygame.font.SysFont("arial", 24)
     small_font = pygame.font.SysFont("arial", 18)
-    small_font = pygame.font.SysFont("arial", 14)
     
-    # Mode selection
+
+    MENU = "menu"
+    GAME = "game"
+
+    game_state = MENU
+    running = True
     mode = None
-    selecting = True
-    
-    while selecting:
-        screen.fill(BG_COLOR)
-        
-        t1 = font.render("Press 1 for Player vs AI", True, TEXT_COLOR)
-        t2 = font.render("Press 2 for AI vs AI", True, TEXT_COLOR)
-        screen.blit(t1, (50, 100))
-        screen.blit(t2, (50, 150))
-        pygame.display.update()
-        
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                sys.exit()
-            
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_1:
-                    mode = 1
-                    selecting = False
-                elif event.key == pygame.K_2:
-                    mode = 2
-                    selecting = False
 
     # GAME INITIALIZATION
     state = Connect4State() # Create empty board
     game_over = False
-    message = "Red turn"
+    message = ""
     stats = {} # MCTS statistics dictionary
     last_move = None # Track last column played
     win_positions = []  # Positions of winning 4-in-a-row
@@ -858,20 +860,36 @@ def main():
     running = True
     while running:
         clock.tick(FPS)
+        if game_state == MENU:
+            mode = menu_loop(screen, font)
+
+            # Reset game state
+            state = Connect4State()
+            game_over = False
+            message = "Red turn"
+            stats = {}
+            last_move = None
+            win_positions = []
+
+            game_state = GAME
+            continue
         
         # EVENT HANDLING
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
-            
-            # Keyboard events
             if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_m:
+                    game_state = MENU
+                    break
+
                 if event.key == pygame.K_r:
                     state = Connect4State()
                     game_over = False
                     message = "Red turn"
                     stats = {}
                     last_move = None
+                    win_positions = []
             
             # PLAYER MOVE (Mode 1 only)
             if mode == 1 and not game_over and state.current_player == PLAYER1:

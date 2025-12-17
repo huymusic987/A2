@@ -1,7 +1,5 @@
 # ============================================================================
 # frog.py
-# Purpose
-#   Player controlled agent. Moves with Arrive.
 # Update order
 #   Compute steering, integrate velocity with dt, clamp to bounds, update bubbles.
 # Drawing
